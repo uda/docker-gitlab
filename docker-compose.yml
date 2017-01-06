@@ -31,5 +31,5 @@ services:
       - "10022:22"
     volumes:
       - /srv/docker/gitlab/gitlab:/home/git/data:Z
-    env:
+    env_file:
       - ./gitlab.env.sh
