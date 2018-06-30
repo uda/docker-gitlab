@@ -1,5 +1,13 @@
 #!/bin/bash
 set -e
+
+for file in /gitlab-configs /run/secrets/gitlab-secrets; do
+	if [[ -e "$file" ]]; then
+		echo "Loading $file"
+		source "$file"
+	fi
+done
+echo "Loading ${GITLAB_RUNTIME_DIR}/env-defaults"
 source ${GITLAB_RUNTIME_DIR}/env-defaults
 
 SYSCONF_TEMPLATES_DIR="${GITLAB_RUNTIME_DIR}/config"
@@ -18,6 +26,8 @@ GITLAB_SHELL_CONFIG="${GITLAB_SHELL_INSTALL_DIR}/config.yml"
 GITLAB_NGINX_CONFIG="/etc/nginx/sites-enabled/gitlab"
 GITLAB_CI_NGINX_CONFIG="/etc/nginx/sites-enabled/gitlab_ci"
 GITLAB_REGISTRY_NGINX_CONFIG="/etc/nginx/sites-enabled/gitlab-registry"
+GITLAB_PAGES_NGINX_CONFIG="/etc/nginx/sites-enabled/gitlab-pages"
+GITLAB_GITALY_CONFIG="${GITLAB_GITALY_INSTALL_DIR}/config.toml"
 
 # Compares two version strings `a` and `b`
 # Returns
@@ -149,10 +159,12 @@ gitlab_finalize_database_parameters() {
   case ${DB_ADAPTER} in
     mysql2)
       DB_ENCODING=${DB_ENCODING:-utf8}
+      DB_COLLATION=${DB_COLLATION:-utf8_general_ci}
       DB_PORT=${DB_PORT:-3306}
       ;;
     postgresql)
       DB_ENCODING=${DB_ENCODING:-unicode}
+      # DB_COLLATION: Not supported for postgresql and will be removed below.
       DB_PORT=${DB_PORT:-5432}
       ;;
     *)
@@ -204,6 +216,7 @@ gitlab_configure_database() {
   update_template ${GITLAB_DATABASE_CONFIG} \
     DB_ADAPTER \
     DB_ENCODING \
+    DB_COLLATION \
     DB_HOST \
     DB_PORT \
     DB_NAME \
@@ -266,6 +279,29 @@ gitlab_configure_redis() {
     REDIS_HOST \
     REDIS_PORT \
     REDIS_DB_NUMBER
+}
+
+gitlab_configure_gitaly() {
+  echo "Configuring gitlab::gitaly..."
+  update_template ${GITLAB_GITALY_CONFIG} \
+    GITALY_SOCKET_PATH \
+    GITLAB_REPOS_DIR
+
+  update_template ${GITLAB_CONFIG} \
+    GITALY_CLIENT_PATH \
+    GITALY_TOKEN
+
+}
+
+gitlab_configure_monitoring() {
+  echo "Configuring gitlab::monitoring..."
+
+  update_template ${GITLAB_CONFIG} \
+    GITLAB_MONITORING_UNICORN_SAMPLER_INTERVAL \
+    GITLAB_MONITORING_IP_WHITELIST \
+    GITLAB_MONITORING_SIDEKIQ_EXPORTER_ENABLED \
+    GITLAB_MONITORING_SIDEKIQ_EXPORTER_ADDRESS \
+    GITLAB_MONITORING_SIDEKIQ_EXPORTER_PORT
 }
 
 gitlab_configure_gitlab_workhorse() {
@@ -415,6 +451,9 @@ gitlab_configure_ldap() {
     LDAP_PORT \
     LDAP_UID \
     LDAP_METHOD \
+    LDAP_VERIFY_SSL \
+    LDAP_CA_FILE \
+    LDAP_SSL_VERSION \
     LDAP_BIND_DN \
     LDAP_PASS \
     LDAP_TIMEOUT \
@@ -423,6 +462,7 @@ gitlab_configure_ldap() {
     LDAP_BLOCK_AUTO_CREATED_USERS \
     LDAP_BASE \
     LDAP_USER_FILTER \
+    LDAP_LOWERCASE_USERNAMES \
     LDAP_LABEL
 }
 
@@ -497,7 +537,7 @@ gitlab_configure_oauth_authentiq() {
       OAUTH_AUTHENTIQ_CLIENT_ID \
       OAUTH_AUTHENTIQ_CLIENT_SECRET \
       OAUTH_AUTHENTIQ_SCOPE \
-      OAUTH_AUTHENTIQ_REDIRECT_URI 
+      OAUTH_AUTHENTIQ_REDIRECT_URI
   else
     exec_as_git sed -i "/name: 'authentiq'/,/{{OAUTH_AUTHENTIQ_SCOPE}}/d" ${GITLAB_CONFIG}
   fi
@@ -692,10 +732,26 @@ gitlab_configure_secrets() {
   GITLAB_SECRETS_DB_KEY_BASE \
   GITLAB_SECRETS_SECRET_KEY_BASE \
   GITLAB_SECRETS_OTP_KEY_BASE
+
+  local shell_secret="${GITLAB_INSTALL_DIR}/.gitlab_shell_secret"
+  if [[ ! -f "${shell_secret}" ]]; then
+    exec_as_git openssl rand -hex -out "${shell_secret}" 16
+    chmod 600 "${shell_secret}"
+  fi
+
+  local workhorse_secret="${GITLAB_INSTALL_DIR}/.gitlab_workhorse_secret"
+  if [[ ! -f "${workhorse_secret}" ]]; then
+    exec_as_git openssl rand -base64 -out "${workhorse_secret}" 32
+    chmod 600 "${workhorse_secret}"
+  fi
 }
 
 gitlab_configure_sidekiq() {
   echo "Configuring gitlab::sidekiq..."
+
+  # configure gitlab sidekiq log format
+  update_template ${GITLAB_CONFIG} \
+    GITLAB_SIDEKIQ_LOG_FORMAT
 
   # configure sidekiq
   update_template /etc/supervisor/conf.d/sidekiq.conf \
@@ -717,8 +773,7 @@ gitlab_configure_sidekiq() {
 gitlab_configure_backups_schedule() {
   case ${GITLAB_BACKUP_SCHEDULE} in
     daily|weekly|monthly)
-      if [[ ! $(crontab -u ${GITLAB_USER} -l >/tmp/cron.${GITLAB_USER} 2>/dev/null) || \
-            ! $(grep -q 'bundle exec rake gitlab:backup:create' /tmp/cron.${GITLAB_USER}) ]]; then
+      if ! crontab -u ${GITLAB_USER} -l >/tmp/cron.${GITLAB_USER} 2>/dev/null || ! grep -q 'bundle exec rake gitlab:backup:create' /tmp/cron.${GITLAB_USER}; then
         echo "Configuring gitlab::backups::schedule..."
         read hour min <<< ${GITLAB_BACKUP_TIME//[:]/ }
         day_of_month=*
@@ -738,24 +793,61 @@ gitlab_configure_backups_schedule() {
 }
 
 gitlab_configure_backups_aws() {
-  case ${AWS_BACKUPS} in
-    true)
-      echo "Configuring gitlab::backups::aws..."
-      if [[ -z ${AWS_BACKUP_REGION} || -z ${AWS_BACKUP_ACCESS_KEY_ID} || -z ${AWS_BACKUP_SECRET_ACCESS_KEY} || -z ${AWS_BACKUP_BUCKET} ]]; then
-        printf "\nMissing AWS options. Aborting...\n"
-        return 1
-      fi
-      update_template ${GITLAB_CONFIG} \
-        AWS_BACKUP_REGION \
-        AWS_BACKUP_ACCESS_KEY_ID \
-        AWS_BACKUP_SECRET_ACCESS_KEY \
-        AWS_BACKUP_BUCKET \
-        AWS_BACKUP_MULTIPART_CHUNK_SIZE
-      ;;
-    *)
-      exec_as_git sed -i "/upload:/,/remote_directory:/d" ${GITLAB_CONFIG}
-      ;;
-  esac
+    echo "Configuring gitlab::backups::aws..."
+    exec_as_git sed -i "/#start-gcs/,/#end-gcs/d" ${GITLAB_CONFIG}
+    exec_as_git sed -i "/#start-aws/d" ${GITLAB_CONFIG}
+    exec_as_git sed -i "/#end-aws/d" ${GITLAB_CONFIG}
+
+    if [[ -z ${AWS_BACKUP_MULTIPART_CHUNK_SIZE} ]]; then
+      exec_as_git sed -i "/#start-multipart/,/#end-multipart/d" ${GITLAB_CONFIG}
+    fi
+
+    if [[ -z ${AWS_BACKUP_MULTIPART_CHUNK_SIZE} ]]; then
+      exec_as_git sed -i "/#start-multipart-aws/,/#end-multipart-aws/d" ${GITLAB_CONFIG}
+    fi
+
+    if [[ ${AWS_BACKUP_ENCRYPTION} != true ]]; then
+      exec_as_git sed -i "/#start-encryption-aws/,/#end-encryption-aws/d" ${GITLAB_CONFIG}
+    fi
+
+    if [[ -z ${AWS_BACKUP_REGION} && -z ${AWS_BACKUP_ENDPOINT} ]]; then
+      echo "\nMissing AWS region or endpoint. Aborting...\n"
+      return 1
+    fi
+
+    if [[ ! -z ${AWS_BACKUP_ENDPOINT} ]]; then
+      AWS_BACKUP_PATH_STYLE="true"
+    fi
+
+    if [[ -z ${AWS_BACKUP_ACCESS_KEY_ID} || -z ${AWS_BACKUP_SECRET_ACCESS_KEY} || -z ${AWS_BACKUP_BUCKET} ]]; then
+      echo "\nMissing AWS options. Aborting...\n"
+      return 1
+    fi
+
+    update_template ${GITLAB_CONFIG} \
+      AWS_BACKUP_REGION \
+      AWS_BACKUP_ENDPOINT \
+      AWS_BACKUP_PATH_STYLE \
+      AWS_BACKUP_ACCESS_KEY_ID \
+      AWS_BACKUP_SECRET_ACCESS_KEY \
+      AWS_BACKUP_BUCKET \
+      AWS_BACKUP_MULTIPART_CHUNK_SIZE \
+      AWS_BACKUP_STORAGE_CLASS
+}
+
+gitlab_configure_backup_gcs() {
+    echo "Configuring gitlab::backups::gcs..."
+    exec_as_git sed -i "/#start-aws/,/#end-aws/d" ${GITLAB_CONFIG}
+    exec_as_git sed -i "/#start-gcs/d" ${GITLAB_CONFIG}
+    exec_as_git sed -i "/#end-gcs/d" ${GITLAB_CONFIG}
+    if [[ -z ${GCS_BACKUP_ACCESS_KEY_ID} || -z ${GCS_BACKUP_SECRET_ACCESS_KEY} || -z ${GCS_BACKUP_BUCKET} ]]; then
+      printf "\nMissing GCS options. Aborting...\n"
+      return 1
+    fi
+    update_template ${GITLAB_CONFIG} \
+      GCS_BACKUP_ACCESS_KEY_ID \
+      GCS_BACKUP_SECRET_ACCESS_KEY \
+      GCS_BACKUP_BUCKET
 }
 
 gitlab_configure_backups() {
@@ -765,9 +857,21 @@ gitlab_configure_backups() {
     GITLAB_BACKUP_EXPIRY \
     GITLAB_BACKUP_PG_SCHEMA \
     GITLAB_BACKUP_ARCHIVE_PERMISSIONS
-
   gitlab_configure_backups_schedule
-  gitlab_configure_backups_aws
+  if [[ ${AWS_BACKUPS} != true && ${GCS_BACKUPS} != true ]]; then
+    exec_as_git sed -i "/upload:/,/#end-gcs/d" ${GITLAB_CONFIG}
+    return 0
+  fi
+  if [[ ${AWS_BACKUPS} == true && ${GCS_BACKUPS} == true ]]; then
+    printf "\nAWS and GCE cannot be enabled together, please choose one...\n"
+    return 1
+  fi
+  if [[ ${AWS_BACKUPS} == true ]]; then
+    gitlab_configure_backups_aws
+  fi
+  if [[ ${GCS_BACKUPS} == true ]]; then
+    gitlab_configure_backup_gcs
+  fi
 }
 
 gitlab_configure_gravatar() {
@@ -785,6 +889,16 @@ gitlab_configure_gravatar() {
     update_template ${GITLAB_CONFIG} GITLAB_GRAVATAR_HTTPS_URL
   else
     exec_as_git sed -i "/{{GITLAB_GRAVATAR_HTTPS_URL}}/d" ${GITLAB_CONFIG}
+  fi
+}
+
+gitlab_configure_cron_jobs() {
+  echo "Configuring gitlab::cron_jobs..."
+
+  if [[ -n "${GITLAB_PIPELINE_SCHEDULE_WORKER_CRON}" ]]; then
+    update_template ${GITLAB_CONFIG} GITLAB_PIPELINE_SCHEDULE_WORKER_CRON
+  else
+    exec_as_git sed -i "/{{GITLAB_PIPELINE_SCHEDULE_WORKER_CRON}}/d" ${GITLAB_CONFIG}
   fi
 }
 
@@ -834,6 +948,24 @@ gitlab_configure_ci() {
 }
 
 gitlab_configure_artifacts() {
+  if [[ ${GITLAB_ARTIFACTS_OBJECT_STORE_ENABLED} == true ]]; then
+    echo "Configuring gitlab::artifacts:object_store"
+    update_template ${GITLAB_CONFIG} \
+      GITLAB_ARTIFACTS_OBJECT_STORE_ENABLED \
+      GITLAB_ARTIFACTS_OBJECT_STORE_REMOTE_DIRECTORY \
+      GITLAB_ARTIFACTS_OBJECT_STORE_BACKGROUND_UPLOAD \
+      GITLAB_ARTIFACTS_OBJECT_STORE_PROXY_DOWNLOAD \
+      GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_PROVIDER \
+      GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_AWS_ACCESS_KEY_ID \
+      GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_AWS_SECRET_ACCESS_KEY \
+      GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_AWS_REGION \
+      GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_AWS_HOST \
+      GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_AWS_ENDPOINT \
+      GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_AWS_PATH_STYLE
+  else 
+   exec_as_git sed -i -e "/path: {{GITLAB_ARTIFACTS_DIR}}/{n;N;N;N;N;N;N;N;N;N;N;N;N;d;}" ${GITLAB_CONFIG}
+  fi
+
   echo "Configuring gitlab::artifacts..."
   update_template ${GITLAB_CONFIG} \
     GITLAB_ARTIFACTS_ENABLED \
@@ -841,10 +973,55 @@ gitlab_configure_artifacts() {
 }
 
 gitlab_configure_lfs() {
+  if [[ ${GITLAB_LFS_OBJECT_STORE_ENABLED} == true ]]; then
+    echo "Configuring gitlab::lfs:object_store"
+    update_template ${GITLAB_CONFIG} \
+      GITLAB_LFS_OBJECT_STORE_ENABLED \
+      GITLAB_LFS_OBJECT_STORE_REMOTE_DIRECTORY \
+      GITLAB_LFS_OBJECT_STORE_DIRECT_UPLOAD \
+      GITLAB_LFS_OBJECT_STORE_BACKGROUND_UPLOAD \
+      GITLAB_LFS_OBJECT_STORE_PROXY_DOWNLOAD \
+      GITLAB_LFS_OBJECT_STORE_CONNECTION_PROVIDER \
+      GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_ACCESS_KEY_ID \
+      GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_SECRET_ACCESS_KEY \
+      GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_REGION \
+      GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_HOST \
+      GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_ENDPOINT \
+      GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_PATH_STYLE
+  else 
+    exec_as_git sed -i -e "/path: {{GITLAB_LFS_OBJECTS_DIR}}/{n;N;N;N;N;N;N;N;N;N;N;N;N;N;d;}"  ${GITLAB_CONFIG}
+  fi
+
   echo "Configuring gitlab::lfs..."
   update_template ${GITLAB_CONFIG} \
     GITLAB_LFS_ENABLED \
     GITLAB_LFS_OBJECTS_DIR
+}
+
+gitlab_configure_uploads() {
+  if [[ ${GITLAB_UPLOADS_OBJECT_STORE_ENABLED} == true ]]; then
+    echo "Configuring gitlab::uploads:object_store"
+    update_template ${GITLAB_CONFIG} \
+      GITLAB_UPLOADS_OBJECT_STORE_ENABLED \
+      GITLAB_UPLOADS_OBJECT_STORE_REMOTE_DIRECTORY \
+      GITLAB_UPLOADS_OBJECT_STORE_DIRECT_UPLOAD \
+      GITLAB_UPLOADS_OBJECT_STORE_BACKGROUND_UPLOAD \
+      GITLAB_UPLOADS_OBJECT_STORE_PROXY_DOWNLOAD \
+      GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_PROVIDER \
+      GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_AWS_ACCESS_KEY_ID \
+      GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_AWS_SECRET_ACCESS_KEY \
+      GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_AWS_REGION \
+      GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_AWS_HOST \
+      GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_AWS_ENDPOINT \
+      GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_AWS_PATH_STYLE
+  else 
+   exec_as_git sed -i -e "/base_dir: {{GITLAB_UPLOADS_BASE_DIR}}/{n;N;N;N;N;N;N;N;N;N;N;N;N;N;d;}"  ${GITLAB_CONFIG}
+  fi
+
+  echo "Configuring gitlab::uploads..."
+  update_template ${GITLAB_CONFIG} \
+    GITLAB_UPLOADS_STORAGE_PATH \
+    GITLAB_UPLOADS_BASE_DIR  
 }
 
 gitlab_configure_mattermost() {
@@ -888,6 +1065,31 @@ gitlab_configure_registry(){
     GITLAB_REGISTRY_ISSUER
 }
 
+gitlab_configure_pages(){
+  echo "Configuring gitlab::pages..."
+  update_template ${GITLAB_CONFIG} \
+    GITLAB_PAGES_ENABLED \
+    GITLAB_PAGES_DOMAIN \
+    GITLAB_PAGES_PORT \
+    GITLAB_PAGES_HTTPS \
+    GITLAB_PAGES_ARTIFACTS_SERVER
+
+  if [[ -n ${GITLAB_PAGES_EXTERNAL_HTTP} ]]; then
+    update_template ${GITLAB_CONFIG} \
+      GITLAB_PAGES_EXTERNAL_HTTP
+  else
+    exec_as_git sed -ie "/{{GITLAB_PAGES_EXTERNAL_HTTP}}/d" ${GITLAB_CONFIG}
+  fi
+
+  if [[ -n ${GITLAB_PAGES_EXTERNAL_HTTPS} ]]; then
+    update_template ${GITLAB_CONFIG} \
+      GITLAB_PAGES_EXTERNAL_HTTPS
+  else
+    exec_as_git sed -ie "/{{GITLAB_PAGES_EXTERNAL_HTTPS}}/d" ${GITLAB_CONFIG}
+  fi
+}
+
+
 nginx_configure_gitlab_ssl() {
   if [[ ${GITLAB_HTTPS} == true && -f ${SSL_CERTIFICATE_PATH} && -f ${SSL_KEY_PATH} && -f ${SSL_DHPARAM_PATH} ]]; then
     echo "Configuring nginx::gitlab::ssl..."
@@ -917,13 +1119,35 @@ nginx_configure_gitlab_hsts() {
   fi
 }
 
-nginx_configure_gitlab_ipv6() {
-  if [[ ! -f /proc/net/if_inet6 ]]; then
-    # disable ipv6 support
-    sed -i \
-      -e "/listen \[::\]:80/d" \
-      -e "/listen \[::\]:443/d" \
-      ${GITLAB_NGINX_CONFIG}
+ nginx_configure_gitlab_ipv6() {
+   if [[ ! -f /proc/net/if_inet6 ]]; then
+     # disable ipv6 support in nginx for gitlab
+     sed -i \
+       -e "/listen \[::\]:80/d" \
+       -e "/listen \[::\]:443/d" \
+       ${GITLAB_NGINX_CONFIG}
+     # disable ipv6 support in nginx for pages
+     if [[ ${GITLAB_PAGES_ENABLED} == true ]]; then
+       sed -i \
+         -e "/listen \[::\]:80/d" \
+         -e "/listen \[::\]:443/d" \
+         ${GITLAB_PAGES_NGINX_CONFIG}
+     fi
+   fi
+ }
+
+nginx_configure_gitlab_real_ip() {
+  if [[ ${NGINX_REAL_IP_RECURSIVE} == on && \
+     -n ${NGINX_REAL_IP_TRUSTED_ADDRESSES} ]]; then
+    echo "Configuring nginx::gitlab::real_ip..."
+    update_template ${GITLAB_NGINX_CONFIG} \
+      NGINX_REAL_IP_RECURSIVE \
+      NGINX_REAL_IP_TRUSTED_ADDRESSES
+  else
+    NGINX_REAL_IP_RECURSIVE="off"
+    update_template ${GITLAB_NGINX_CONFIG} \
+      NGINX_REAL_IP_RECURSIVE
+    sed -i "/{{NGINX_REAL_IP_TRUSTED_ADDRESSES}}/d" ${GITLAB_NGINX_CONFIG}
   fi
 }
 
@@ -941,6 +1165,7 @@ nginx_configure_gitlab() {
   nginx_configure_gitlab_ssl
   nginx_configure_gitlab_hsts
   nginx_configure_gitlab_ipv6
+  nginx_configure_gitlab_real_ip
 }
 
 nginx_configure_gitlab_ci() {
@@ -968,6 +1193,29 @@ nginx_configure_gitlab_registry() {
   fi
 }
 
+nginx_configure_pages(){
+  local GITLAB_PAGES_DOMAIN=$(echo $GITLAB_PAGES_DOMAIN | sed 's/\./\\\\./g')
+  if [[ ${GITLAB_PAGES_ENABLED} == true ]]; then
+    echo "Configuring nginx::gitlab-pages..."
+    if [[ ${GITLAB_PAGES_HTTPS} == true ]]; then
+      update_template ${GITLAB_PAGES_NGINX_CONFIG} \
+        GITLAB_PORT \
+        GITLAB_PAGES_DOMAIN \
+        GITLAB_PAGES_PORT \
+        GITLAB_LOG_DIR \
+        GITLAB_PAGES_DOMAIN \
+        SSL_PAGES_CERT_PATH \
+        SSL_PAGES_KEY_PATH \
+        SSL_DHPARAM_PATH \
+        GITLAB_LOG_DIR
+    else
+      update_template ${GITLAB_PAGES_NGINX_CONFIG} \
+        GITLAB_PAGES_DOMAIN \
+        GITLAB_LOG_DIR
+    fi
+  fi
+}
+
 
 #   _|_|_|              _|        _|  _|
 #   _|    _|  _|    _|  _|_|_|    _|        _|_|_|
@@ -989,10 +1237,11 @@ map_uidgid() {
 }
 
 update_ca_certificates() {
-  if [[ -f ${SSL_CERTIFICATE_PATH} || -f ${SSL_CA_CERTIFICATES_PATH} ]]; then
+  if [[ -f ${SSL_CERTIFICATE_PATH} || -f ${SSL_CA_CERTIFICATES_PATH} || -f ${SSL_REGISTRY_CERT_PATH} ]]; then
     echo "Updating CA certificates..."
     [[ -f ${SSL_CERTIFICATE_PATH} ]] && cp "${SSL_CERTIFICATE_PATH}" /usr/local/share/ca-certificates/gitlab.crt
     [[ -f ${SSL_CA_CERTIFICATES_PATH} ]] && cp "${SSL_CA_CERTIFICATES_PATH}" /usr/local/share/ca-certificates/ca.crt
+    [[ -f ${SSL_REGISTRY_CERT_PATH} ]] && cp "${SSL_REGISTRY_CERT_PATH}" /usr/local/share/ca-certificates/registry-ca.crt
     update-ca-certificates --fresh >/dev/null
   fi
 }
@@ -1055,6 +1304,11 @@ initialize_datadir() {
   mkdir -p ${GITLAB_ARTIFACTS_DIR}
   chmod u+rwX ${GITLAB_ARTIFACTS_DIR}
   chown ${GITLAB_USER}: ${GITLAB_ARTIFACTS_DIR}
+
+  # create pages dir
+  mkdir -p ${GITLAB_PAGES_DIR}
+  chmod u+rwX ${GITLAB_PAGES_DIR}
+  chown ${GITLAB_USER}: ${GITLAB_PAGES_DIR}
 
   # symlink ${GITLAB_INSTALL_DIR}/shared -> ${GITLAB_DATA_DIR}/shared
   rm -rf ${GITLAB_INSTALL_DIR}/shared
@@ -1130,6 +1384,9 @@ sanitize_datadir() {
   chmod -R u+rwX ${GITLAB_ARTIFACTS_DIR}
   chown -R ${GITLAB_USER}: ${GITLAB_ARTIFACTS_DIR}
 
+  chmod -R u+rwX ${GITLAB_PAGES_DIR}
+  chown -R ${GITLAB_USER}: ${GITLAB_PAGES_DIR}
+
   chmod -R u+rwX ${GITLAB_LFS_OBJECTS_DIR}
   chown -R ${GITLAB_USER}: ${GITLAB_LFS_OBJECTS_DIR}
 
@@ -1156,7 +1413,6 @@ generate_ssh_host_keys() {
   sed -i "s|HostKey /etc/ssh/|HostKey ${GITLAB_DATA_DIR}/ssh/|g" /etc/ssh/sshd_config
   if [[ ! -e ${GITLAB_DATA_DIR}/ssh/ssh_host_rsa_key ]]; then
     echo -n "Generating OpenSSH host keys... "
-    generate_ssh_key rsa1     ${GITLAB_DATA_DIR}/ssh/ssh_host_key
     generate_ssh_key rsa      ${GITLAB_DATA_DIR}/ssh/ssh_host_rsa_key
     generate_ssh_key dsa      ${GITLAB_DATA_DIR}/ssh/ssh_host_dsa_key
     generate_ssh_key ecdsa    ${GITLAB_DATA_DIR}/ssh/ssh_host_ecdsa_key
@@ -1215,6 +1471,20 @@ install_configuration_templates() {
     install_template root: nginx/gitlab ${GITLAB_NGINX_CONFIG}
   fi
 
+
+  ## ${GITLAB_PAGES_NGINX_CONFIG}
+  if [[ ${GITLAB_PAGES_ENABLED} == true ]]; then
+    if [[ ${GITLAB_PAGES_HTTPS} == true && -f ${SSL_PAGES_CERT_PATH} && -f ${SSL_PAGES_KEY_PATH} ]]; then
+      install_template root: nginx/gitlab-pages-ssl ${GITLAB_PAGES_NGINX_CONFIG}
+    else
+      echo "SSL Key, SSL Certificate were not found."
+      echo "Assuming that the container is running behind a HTTPS enabled load balancer."
+      install_template root: nginx/gitlab-pages ${GITLAB_PAGES_NGINX_CONFIG}
+    fi
+  fi
+
+
+
   if [[ -n $GITLAB_CI_HOST ]]; then
     install_template root: nginx/gitlab_ci ${GITLAB_CI_NGINX_CONFIG}
   fi
@@ -1227,6 +1497,8 @@ install_configuration_templates() {
       echo "Assuming that the Registry is running behind a HTTPS enabled load balancer."
     fi
   fi
+
+  install_template ${GITLAB_USER}: gitaly/config.toml ${GITLAB_GITALY_CONFIG}
 }
 
 configure_gitlab() {
@@ -1242,19 +1514,19 @@ configure_gitlab() {
     GITLAB_PORT \
     GITLAB_RELATIVE_URL_ROOT \
     GITLAB_HTTPS \
-    GITLAB_MAX_OBJECT_SIZE \
     GITLAB_SSH_HOST \
     GITLAB_SSH_PORT \
     GITLAB_SIGNUP_ENABLED \
     GITLAB_PROJECTS_LIMIT \
     GITLAB_USERNAME_CHANGE \
-    GITLAB_CREATE_GROUP \
-    GITLAB_TIMEOUT
+    GITLAB_CREATE_GROUP 
 
   gitlab_configure_database
   gitlab_configure_redis
   gitlab_configure_secrets
   gitlab_configure_sidekiq
+  gitlab_configure_gitaly
+  gitlab_configure_monitoring
   gitlab_configure_gitlab_workhorse
   gitlab_configure_relative_url
   gitlab_configure_trusted_proxies
@@ -1264,6 +1536,7 @@ configure_gitlab() {
   gitlab_configure_ci
   gitlab_configure_artifacts
   gitlab_configure_lfs
+  gitlab_configure_uploads
   gitlab_configure_mattermost
   gitlab_configure_project_features
   gitlab_configure_mail_delivery
@@ -1271,9 +1544,11 @@ configure_gitlab() {
   gitlab_configure_oauth
   gitlab_configure_ldap
   gitlab_configure_gravatar
+  gitlab_configure_cron_jobs
   gitlab_configure_analytics
   gitlab_configure_backups
   gitlab_configure_registry
+  gitlab_configure_pages
 
   # remove stale gitlab.socket
   rm -rf ${GITLAB_INSTALL_DIR}/tmp/sockets/gitlab.socket
@@ -1292,6 +1567,46 @@ configure_gitlab_shell() {
     REDIS_DB_NUMBER
 }
 
+
+configure_gitlab_pages() {
+  if [[ ${GITLAB_PAGES_ENABLED} == true ]]; then
+  echo "Configuring gitlab-pages..."
+cat > /etc/supervisor/conf.d/gitlab-pages.conf <<EOF
+[program:gitlab-pages]
+priority=20
+directory=${GITLAB_INSTALL_DIR}
+environment=HOME=${GITLAB_HOME}
+command=/usr/local/bin/gitlab-pages
+  -pages-domain ${GITLAB_PAGES_DOMAIN}
+  -pages-root ${GITLAB_PAGES_DIR}
+  -listen-proxy :8090
+EOF
+
+if [[ -n ${GITLAB_PAGES_EXTERNAL_HTTP} ]]; then
+cat >> /etc/supervisor/conf.d/gitlab-pages.conf <<EOF
+  -listen-http ${GITLAB_PAGES_EXTERNAL_HTTP}
+EOF
+fi
+
+
+if [[ -n ${GITLAB_PAGES_EXTERNAL_HTTPS} ]]; then
+cat >> /etc/supervisor/conf.d/gitlab-pages.conf <<EOF
+  -listen-https ${GITLAB_PAGES_EXTERNAL_HTTPS}
+  -root-cert ${SSL_PAGES_CERT_PATH}
+  -root-key ${SSL_PAGES_KEY_PATH}
+EOF
+fi
+
+cat >> /etc/supervisor/conf.d/gitlab-pages.conf <<EOF
+user=git
+autostart=true
+autorestart=true
+stdout_logfile=${GITLAB_INSTALL_DIR}/log/%(program_name)s.log
+stderr_logfile=${GITLAB_INSTALL_DIR}/log/%(program_name)s.log
+EOF
+fi
+}
+
 configure_nginx() {
   echo "Configuring nginx..."
   sed -i \
@@ -1302,6 +1617,7 @@ configure_nginx() {
   nginx_configure_gitlab
   nginx_configure_gitlab_ci
   nginx_configure_gitlab_registry
+  nginx_configure_pages
 }
 
 migrate_database() {
@@ -1369,7 +1685,7 @@ migrate_database() {
     # assets need to be recompiled when GITLAB_RELATIVE_URL_ROOT is used
     if [[ -n ${GITLAB_RELATIVE_URL_ROOT} ]]; then
       echo "Recompiling assets (relative_url in use), this could take a while..."
-      exec_as_git bundle exec rake assets:clean assets:precompile >/dev/null 2>&1
+      exec_as_git bundle exec rake gitlab:assets:compile >/dev/null 2>&1
     fi
 
     echo "Clearing cache..."

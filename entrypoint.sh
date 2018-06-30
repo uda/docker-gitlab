@@ -10,11 +10,16 @@ case ${1} in
     initialize_system
     configure_gitlab
     configure_gitlab_shell
+    configure_gitlab_pages
     configure_nginx
 
     case ${1} in
       app:start)
+        /usr/bin/supervisord -nc /etc/supervisor/supervisord.conf &
+        SUPERVISOR_PID=$!
         migrate_database
+        kill -15 $SUPERVISOR_PID
+        ps h -p $SUPERVISOR_PID > /dev/null && wait $SUPERVISOR_PID
         rm -rf /var/run/supervisor.sock
         exec /usr/bin/supervisord -nc /etc/supervisor/supervisord.conf
         ;;

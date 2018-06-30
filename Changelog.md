@@ -1,11 +1,437 @@
 # Changelog
 
-This file only reflects the changes that are made in this image. Please refer to the upstream GitLab [CHANGELOG](https://gitlab.com/gitlab-org/gitlab-ce/blob/master/CHANGELOG.md) for the list of changes in GitLab.
+This file only reflects the changes that are made in this image. Please refer to the upstream GitLab [CHANGELOG](
+https://gitlab.com/gitlab-org/gitlab-ce/blob/master/CHANGELOG.md) for the list of changes in GitLab.
 
-**8.15.2
+**11.0.1**
+- gitlab: upgrade CE to v11.0.1
+
+**11.0.0**
+- gitlab: upgrade CE to v11.0.0
+
+**10.8.4**
+- gitlab: upgrade CE to v10.8.4
+
+**10.8.3-1**
+- Fix boot loops that were introduced during [#1621](https://github.com/sameersbn/docker-gitlab/pull/1621) and will be fixed with [#1628](https://github.com/sameersbn/docker-gitlab/pull/1628)
+
+
+**10.8.3**
+- gitlab: upgrade CE to v10.8.3
+- Fix potential boot problems on clean setups [#1621](https://github.com/sameersbn/docker-gitlab/pull/1621)
+
+**10.8.2**
+- gitlab: upgrade CE to v10.8.2
+
+**10.8.1**
+- gitlab: upgrade CE to v10.8.1
+
+**10.8.0**
+- gitlab: upgrade CE to v10.8.0
+- Add support for swarm mode with docker-configs and docker secrets ([#1540](https://github.com/sameersbn/docker-gitlab/pull/1540))
+
+**10.7.4**
+- gitlab: upgrade CE to v10.7.4
+- FIX `GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_AWS_ENDPOINT`
+
+**10.7.3**
+- gitlab: upgrade CE to v10.7.3
+
+**10.7.2**
+- gitlab: upgrade CE to v10.7.2
+
+**10.7.1**
+- gitlab: upgrade CE to v10.7.1
+
+**10.7.0**
+- gitlab: upgrade CE to v10.7.0
+- ADD `GITLAB_SIDEKIQ_LOG_FORMAT`
+- ADD `GITLAB_ARTIFACTS_OBJECT_STORE_ENABLED`
+- ADD `GITLAB_ARTIFACTS_OBJECT_STORE_REMOTE_DIRECTORY`
+- ADD `GITLAB_ARTIFACTS_OBJECT_STORE_BACKGROUND_UPLOAD`
+- ADD `GITLAB_ARTIFACTS_OBJECT_STORE_PROXY_DOWNLOAD`
+- ADD `GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_PROVIDER`
+- ADD `GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_AWS_ACCESS_KEY_ID`
+- ADD `GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_AWS_SECRET_ACCESS_KEY`
+- ADD `GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_AWS_REGION`
+- ADD `GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_AWS_HOST`
+- ADD `GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_AWS_ENDPOINT`
+- ADD `GITLAB_ARTIFACTS_OBJECT_STORE_CONNECTION_AWS_PATH_STYLE`
+
+- ADD `GITLAB_LFS_OBJECT_STORE_ENABLED`
+- ADD `GITLAB_LFS_OBJECT_STORE_REMOTE_DIRECTORY`
+- ADD `GITLAB_LFS_OBJECT_STORE_DIRECT_UPLOAD`
+- ADD `GITLAB_LFS_OBJECT_STORE_BACKGROUND_UPLOAD`
+- ADD `GITLAB_LFS_OBJECT_STORE_PROXY_DOWNLOAD`
+- ADD `GITLAB_LFS_OBJECT_STORE_CONNECTION_PROVIDER`
+- ADD `GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_ACCESS_KEY_ID`
+- ADD `GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_SECRET_ACCESS_KEY`
+- ADD `GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_REGION`
+- ADD `GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_HOST`
+- ADD `GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_ENDPOINT`
+- ADD `GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_PATH_STYLE`
+
+- ADD `GITLAB_UPLOADS_OBJECT_STORE_ENABLED`
+- ADD `GITLAB_UPLOADS_OBJECT_STORE_REMOTE_DIRECTORY`
+- ADD `GITLAB_UPLOADS_OBJECT_STORE_DIRECT_UPLOAD`
+- ADD `GITLAB_UPLOADS_OBJECT_STORE_BACKGROUND_UPLOAD`
+- ADD `GITLAB_UPLOADS_OBJECT_STORE_PROXY_DOWNLOAD`
+- ADD `GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_PROVIDER`
+- ADD `GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_AWS_ACCESS_KEY_ID`
+- ADD `GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_AWS_SECRET_ACCESS_KEY`
+- ADD `GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_AWS_REGION`
+- ADD `GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_AWS_HOST`
+- ADD `GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_AWS_ENDPOINT`
+- ADD `GITLAB_UPLOADS_OBJECT_STORE_CONNECTION_AWS_PATH_STYLE`
+
+**10.6.4**
+- gitlab: upgrade CE to v10.6.4
+
+**10.6.3**
+- gitlab: upgrade CE to v10.6.3
+
+**10.6.2**
+- gitlab: upgrade CE to v10.6.2
+- golang: update to 1.9.5
+
+**10.6.1**
+- gitlab: upgrade CE to v10.6.1
+
+**10.6.0**
+- gitlab: upgrade CE to v10.6.0
+
+**10.5.6**
+- gitlab: security upgrade CE to v10.5.6
+
+**10.5.5**
+- gitlab: upgrade CE to v10.5.5
+
+**10.5.4**
+- gitlab: upgrade CE to v10.5.4
+
+**10.5.3**
+- gitlab: upgrade CE to v10.5.3
+
+**10.5.2**
+- gitlab: upgrade CE to v10.5.2
+- Fix `GITLAB_UPLOADS_STORAGE_PATH`
+
+**10.5.1**
+- gitlab: upgrade CE to v10.5.1
+
+**10.5.0**
+- gitlab: upgrade CE to v10.5.0
+- Add `GITLAB_UPLOADS_STORAGE_PATH`
+- Add `GITLAB_UPLOADS_BASE_DIR`
+- Add `LDAP_LOWERCASE_USERNAMES`
+
+**10.4.4**
+- gitlab: upgrade CE to v10.4.4
+
+**10.4.3**
+- gitlab: upgrade CE to v10.4.3
+
+**10.4.2-1**
+- FIXED SSH Host Key generation through droping the support for rsa1
+
+**10.4.2**
+- gitlab: upgrade CE to v10.4.2
+
+**10.4.1**
+- gitlab: upgrade CE to v10.4.1
+
+**10.4.0**
+- gitlab: upgrade CE to v10.4.0
+- docker: upgrade to ubuntu xenial as baseimage
+- golang: update to 1.9.3
+
+**10.3.6**
+- gitlab: upgrade CE to v10.3.6
+
+**10.3.5**
+- gitlab: upgrade CE to v10.3.5
+
+**10.3.4**
+- gitlab: upgrade CE to v10.3.4
+
+**10.3.3**
+- gitlab: upgrade CE to v10.3.3
+- ADDED `AWS_BACKUP_ENCRYPTION` [1449](https://github.com/sameersbn/docker-gitlab/pull/1449/)
+- ADDED `AWS_BACKUP_STORAGE_CLASS` [1449](https://github.com/sameersbn/docker-gitlab/pull/1449/)
+- FIXED `AWS_BACKUP_MULTIPART_CHUNK_SIZE` [1449](https://github.com/sameersbn/docker-gitlab/pull/1449/)
+- Apply PaX mark to ruby [1458](https://github.com/sameersbn/docker-gitlab/pull/1458)
+
+**10.3.2**
+- gitlab: upgrade CE to v10.3.2
+
+**10.3.1**
+- gitlab: upgrade CE to v10.3.1
+
+**10.3.0**
+- gitlab: upgrade CE to v10.3.0
+- REMOVED `GITLAB_REPOSITORIES_STORAGES_DEFAULT_FAILURE_COUNT_THRESHOLD`
+- REMOVED `GITLAB_REPOSITORIES_STORAGES_DEFAULT_FAILURE_WAIT_TIME`
+- REMOVED `GITLAB_REPOSITORIES_STORAGES_DEFAULT_FAILURE_RESET_TIME`
+- REMOVED `GITLAB_REPOSITORIES_STORAGES_DEFAULT_STORAGE_TIMEOUT`
+- REMOVED `GITLAB_MAX_OBJECT_SIZE`
+- REMOVED `GITLAB_TIMEOUT`
+
+**10.2.5**
+- gitlab: upgrade CE to v10.2.5
+
+**10.2.4**
+- gitlab: upgrade to CE v10.2.4
+
+**10.2.3**
+- gitlab: upgrade to CE v10.2.3
+
+**10.2.2**
+- gitlab: upgrade to CE v10.2.2
+
+**10.2.1**
+- gitlab: upgrade to CE v10.2.1
+
+**10.2.0**
+- gitlab: upgrade to CE v10.2.0
+
+**10.1.4**
+- gitlab: upgrade to CE v10.1.4
+
+**10.1.3**
+- gitlab: upgrade to CE v10.1.3
+
+**10.1.2**
+- gitlab: upgrade to CE v10.1.2
+
+**10.1.1**
+- gitlab: upgrade to CE v10.1.1
+
+**10.1.0**
+- gitlab: upgrade to CE v10.1.0
+- REMOVED `GITALY_ENABLED``
+- ADDED `GITALY_ARTIFACTS_SERVER`
+- ADDED `GITALY_CLIENT_PATH`
+
+**10.0.4**
+- gitlab: upgrade to CE v10.0.4
+
+**10.0.3**
+- gitlab: upgrade to CE v10.0.3
+
+**10.0.2**
+- gitlab: upgrade to CE v10.0.2
+
+**10.0.1**
+- gitlab: upgrade to CE v10.0.1
+
+**10.0.0**
+- gitlab: upgrade to CE v10.0.0
+
+**9.5.5**
+- gitlab: upgrade to CE v9.5.5
+
+**9.5.4**
+- gitlab: upgrade to CE v9.5.4
+
+**9.5.3**
+- gitlab: upgrade to CE v9.5.3
+
+**9.5.2**
+- gitlab: upgrade to CE v9.5.2
+
+**9.5.1**
+- gitlab: upgrade to CE v9.5.1
+
+**9.5.0**
+- gitlab: upgrade to CE v9.5.0
+
+**9.4.5**
+- gitlab: upgrade to CE v9.4.5
+
+**9.4.4**
+- gitlab: upgrade to CE v9.4.4
+
+**9.4.3**
+- gitlab: upgrade to CE v9.4.3
+
+**9.4.2**
+- gitlab: upgrade to CE v9.4.2
+
+**9.4.1**
+- gitlab: upgrade to CE v9.4.1
+
+**9.4.0-1**
+- Fix asset compiling for missing translations
+
+**9.4.0**
+- gitlab: upgrade to CE v9.4.0
+- Added support for nginx_real_ip module ([#1137](https://github.com/sameersbn/docker-gitlab/pull/1137))
+- Added more security for regenarting certs ([#1288](https://github.com/sameersbn/docker-gitlab/pull/1288))
+
+**9.3.9**
+- gitlab: upgrade to CE v9.3.9
+
+**9.3.8**
+- gitlab: upgrade to CE v9.3.8
+- Added RE2 library to build dependencies ([issue 35342](https://gitlab.com/gitlab-org/gitlab-ce/issues/35342))
+
+**9.3.7**
+- gitlab: upgrade to CE v9.3.7
+
+**9.3.6**
+- gitlab: upgrade to CE v9.3.6
+
+**9.3.5**
+- gitlab: upgrade to CE v9.3.5
+
+**9.3.4**
+- gitlab: upgrade to CE v9.3.4
+
+**9.3.3**
+- gitlab: upgrade to CE v9.3.3
+
+**9.3.2**
+- gitlab: upgrade to CE v9.3.2
+
+**9.3.1**
+- gitlab: upgrade to CE v9.3.1
+
+**9.3.0-1**
+- Add the missing Gitaly config to let git commands over http/https working
+
+**9.3.0**
+- gitlab: upgrade to CE v9.3.0
+- update baseimage to `14.04.20170608`
+- Add `DB_COLLATION` (For MySQL related doesn't recognize by postgres)
+- Add `GITLAB_PIPELINE_SCHEDULE_WORKER_CRON`
+- Add `GITALY_ENABLED`
+- Add `GITALY_SOCKET_PATH`
+- Add `GITALY_ADDRESS`
+
+**9.2.7**
+- gitlab: upgrade to CE v9.2.7
+
+**9.2.6**
+- gitlab: upgrade to CE v9.2.6
+
+**9.2.5**
+- gitlab: upgrade to CE v9.2.5
+
+**9.2.2**
+- gitlab: upgrade to CE v9.2.2
+
+**9.2.1**
+- gitlab: upgrade to CE v9.2.1
+
+**9.2.0**
+- gilab: upgrade to CE v9.2.0
+- Add flexibility to use versions committed into gitlab-ce
+
+**9.1.4**
+- gitlab: upgrade to CE v9.1.4
+
+**9.1.3**
+- gitlab: upgrade to CE v9.1.3
+
+**9.1.2**
+- gitlab: upgrade to CE v9.1.2
+- update baseimage to `14.04.20170503`
+
+**9.1.1**
+- gitlab: upgrade to CE v9.1.1
+
+**9.1.0-1**
+- Fix gitlab-workhorse version display
+
+**9.1.0**
+- gitlab: upgrade to CE v9.1.0
+- gitlab-shell: upgrade to 5.0.2
+- gitlab-workhorse: upgrade to 1.4.3
+
+**9.0.6**
+- gitlab: upgrade to CE v9.0.6
+
+**9.0.5**
+- gitlab: upgrade to CE v9.0.5
+
+**9.0.4**
+- gitlab: upgrade to CE v9.0.4
+
+**9.0.3**
+- gitlab: upgrade to CE v9.0.3
+
+**9.0.2**
+- gitlab: upgrade to CE v9.0.2
+
+**9.0.1**
+- gitlab: upgrade to CE v9.0.1
+- gitlab-workhorse 1.4.2
+
+**9.0.0**
+- gitlab: upgrade to CE v9.0.0
+- gitlab-shell 5.0.0
+- gitlab-workhorse 1.4.1
+- gitlab-pages 0.4.0
+
+**8.17.4**
+- gitlab: upgrade to CE v8.17.4
+
+**8.17.3**
+- gitlab: upgrade to CE v8.17.3
+
+**8.17.2**
+- gitlab: upgrade to CE v8.17.2
+
+**8.17.1**
+- gitlab: upgrade to CE v8.17.1
+- fixes first problems with gitlab-pages
+
+**8.17.0**
+- gitlab: upgrade to CE v8.17.0
+- added `GITLAB_PAGES_ENABLED`
+- added `GITLAB_PAGES_DOMAIN`
+- added `GITLAB_PAGES_DIR`
+- added `GITLAB_PAGES_PORT`
+- added `GITLAB_PAGES_HTTPS`
+- added `GITLAB_PAGES_EXTERNAL_HTTP`
+- added `GITLAB_PAGES_EXTERNAL_HTTPS`
+- added `SSL_PAGES_KEY_PATH`
+- added `SSL_PAGES_CERT_PATH`
+- added nodejs 7.x as core dependencie
+- added gitlab-pages daemon
+
+**8.16.6**
+- gitlab: upgrade to CE v8.16.6
+- Fix logical bug of Remote Backup
+
+**8.16.5**
+- gitlab: upgrade to CE v8.16.5
+
+**8.16.4**
+- gitlab: upgrade to CE v8.16.4
+
+**8.16.3**
+- gitlab: upgrade to CE v8.16.3
+
+**8.16.2**
+- gitlab: upgrade to CE v8.16.2
+
+**8.16.1**
+- gitlab: upgrade to CE v8.16.1
+
+**8.16.0**
+- gitlab: upgrade to CE v8.16.0
+
+**8.15.4**
+- gitlab: upgrade to CE v8.15.4
+
+**8.15.3**
+- gitlab: upgrade to CE v8.15.3
+
+**8.15.2**
 - gitlab: upgrade to CE v8.15.2
 
-**8.15.1
+**8.15.1**
 - gitlab: upgrade to CE v8.15.1
 
 **8.15.0**

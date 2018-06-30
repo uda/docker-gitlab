@@ -28,26 +28,12 @@ http_settings:
 auth_file: "{{GITLAB_HOME}}/.ssh/authorized_keys"
 
 # File that contains the secret key for verifying access to GitLab.
-# Default is .gitlab_shell_secret in the root directory.
+# Default is .gitlab_shell_secret in the gitlab-shell directory.
 secret_file: "{{GITLAB_SHELL_INSTALL_DIR}}/.gitlab_shell_secret"
 
-# Redis settings used for pushing commit notices to gitlab
-redis:
-  bin: /usr/bin/redis-cli
-  host: "{{REDIS_HOST}}"
-  port: {{REDIS_PORT}}
-  # pass: redispass # Allows you to specify the password for Redis
-  database: {{REDIS_DB_NUMBER}}
-  # socket: /var/run/redis/redis.sock # Comment out this line if you want to use TCP or Sentinel
-  namespace: resque:gitlab
-  # sentinels:
-  #   -
-  #     host: 127.0.0.1
-  #     port: 26380
-  #   -
-  #     host: 127.0.0.1
-  #     port: 26381
-
+# Parent directory for global custom hook directories (pre-receive.d, update.d, post-receive.d)
+# Default is hooks in the gitlab-shell directory.
+custom_hooks_dir: "{{GITLAB_SHELL_INSTALL_DIR}}/hooks"
 
 # Log file.
 # Default is gitlab-shell.log in the root directory.
@@ -60,14 +46,6 @@ log_level: INFO
 # Set to true to see real usernames in the logs instead of key ids, which is easier to follow, but
 # incurs an extra API call on every gitlab-shell command.
 audit_usernames: false
-
-# Enable git-annex support
-# git-annex allows managing files with git, without checking the file contents into git
-# See https://git-annex.branchable.com/ for documentation
-# If enabled, git-annex needs to be installed on the server where gitlab-shell is setup
-# For Debian and Ubuntu systems this can be done with: sudo apt-get install git-annex
-# For CentOS: sudo yum install epel-release && sudo yum install git-annex
-git_annex_enabled: false
 
 # Git trace log file.
 # If set, git commands receive GIT_TRACE* environment variables
